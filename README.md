@@ -11,12 +11,17 @@ raw_benchmarks/
   IxIDN_df.csv                 5,336 pairs with clinical-trial evidence (drug_labels, trial_count_total)
   ORDON_df.csv                 5,000 ontology-derived pairs
 claude_science/
-  merge_benchmark_sources.ipynb        the pipeline
-  IxIDN_ORDON_benchmark_DDA_v1.csv     DDA scores, v1
-  IxIDN_ORDON_benchmark_DDA_v2.csv     DDA scores, v2 (11 rows differ from v1, max delta 0.0519)
-  IxIDN_ORDON_benchmark_v2_merged.csv  merged output for v2
-  dda_*.png                            rendered figures
+  dda_analysis.py                      all the logic — merge, metrics, figures
+  merge_benchmark_sources_v1.ipynb     driver for DDA v1
+  merge_benchmark_sources_v2.ipynb     driver for DDA v2
+  compare_dda_v1_v2.ipynb              v1 vs v2 comparison
+  IxIDN_ORDON_benchmark_DDA_v{1,2}.csv DDA scores
+  IxIDN_ORDON_benchmark_v{1,2}_merged.csv  merged outputs
 ```
+
+The notebooks are thin drivers — every function lives in `dda_analysis.py`, so the three
+notebooks share one implementation. Figures render inline and are stored inside the
+notebooks; nothing is written to disk as an image.
 
 ## Setup
 
@@ -27,16 +32,11 @@ python3 -m venv .venv
   --name benchmark-ixidn-ordon --display-name "Python (benchmark-IxIDN-ORDON)"
 ```
 
-Then open `claude_science/merge_benchmark_sources.ipynb` and select that kernel.
-
-The notebook is parameterized — the DDA input and output filename default to v2 and can be
-overridden without editing:
+Then open a notebook in `claude_science/` and select that kernel. To re-run headless:
 
 ```sh
-cd claude_science
-DDA_FILE=IxIDN_ORDON_benchmark_DDA_v1.csv \
-MERGED_FILE=IxIDN_ORDON_benchmark_v1_merged.csv \
-  ../.venv/bin/jupyter nbconvert --to notebook --execute --inplace merge_benchmark_sources.ipynb
+.venv/bin/jupyter nbconvert --to notebook --execute --inplace \
+  claude_science/merge_benchmark_sources_v2.ipynb
 ```
 
 ## Merge
@@ -61,23 +61,40 @@ where `IxIDN_ID` / `ORDON_ID` are 0-based row numbers in the source CSVs (blank 
 Every source row is accounted for: 5,336/5,336 IxIDN and 5,000/5,000 ORDON pairs appear in the
 benchmark exactly once.
 
-## DDA separation (v2)
+## DDA separation
 
 Treating **IxIDN as positive** and **ORDON as negative**, with the 4 both-source pairs excluded as
-unlabelable:
+unlabelable (v2 figures; v1 is indistinguishable — see below):
 
 | group | n | mean | median | IQR |
-|---|---:|---:|---:|---|
+|---|---:|---:|---:|---:|
 | IxIDN (positive) | 5,334 | 0.3610 | 0.3356 | 0.2512 – 0.4488 |
 | ORDON (negative) | 4,998 | 0.2077 | 0.2018 | 0.1611 – 0.2476 |
 
-- **AUC 0.827**; Youden-optimal cut at `DDA >= 0.275` (TPR 0.683, FPR 0.154).
+- **AUC 0.827**; Youden-optimal cut at `DDA >= 0.2745` (TPR 0.683, FPR 0.154).
 - **Wasserstein W₁ = 0.1533** DDA units (1.27 pooled SD), IxIDN shifted higher.
 - W₁ equals the mean difference to machine precision, which holds only when the two CDFs never
-  cross — verified directly. IxIDN **stochastically dominates** ORDON across the whole DDA range,
-  so the separation is monotone rather than confined to one region of the score.
+  cross — verified directly over the score range. IxIDN **stochastically dominates** ORDON
+  everywhere, so the separation is monotone rather than confined to one region of the score.
 
 **Caveat.** The two classes here are *which source file a pair came from*, not validated
 positive/negative labels. IxIDN pairs carry clinical-trial evidence while ORDON pairs are
 ontology-derived, so these numbers partly measure how well DDA recovers that provenance
 difference. Read them as a separation measure, not as association validation.
+
+## v1 vs v2
+
+Only **11 of 10,336** scores differ (99.894% identical), all revised **downward**:
+
+| metric | v1 | v2 | Δ |
+|---|---:|---:|---:|
+| AUC | 0.827330 | 0.827169 | −0.000161 |
+| W₁ | 0.153284 | 0.153255 | −0.000029 |
+| best threshold | 0.2745 | 0.2745 | 0 |
+| TPR / FPR at best | 0.683 / 0.154 | 0.683 / 0.154 | 0 / 0 |
+
+Two things stand out. All 11 changed rows are **IxIDN positives**, and all 11 share the same
+`d1_disease_label` — *Polyneuropathy associated with IgM monoclonal gammopathy* — so the revision
+is confined to one disease's pairs rather than spread across the benchmark. And because those rows
+were already low-scoring positives being pushed lower, v2 is fractionally *worse* at the
+IxIDN-vs-ORDON separation task, though the change is far too small to matter (ΔAUC −1.6e−4).
