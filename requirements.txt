@@ -1,0 +1,11 @@
+pandas
+numpy
+scipy
+scikit-learn
+matplotlib
+jupyter
+ipykernel
+
+# Pinned for Python 3.9: fastjsonschema >= 2.22 uses PEP 604 (`X | Y`) syntax at
+# import time, which breaks nbformat/nbconvert on 3.9. Drop the pin on 3.10+.
+fastjsonschema<2.22

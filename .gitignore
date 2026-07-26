@@ -1,0 +1,15 @@
+# virtualenv
+.venv/
+
+# python
+__pycache__/
+*.py[cod]
+
+# jupyter
+.ipynb_checkpoints/
+
+# machine-local Claude Code settings
+.claude/settings.local.json
+
+# macOS
+.DS_Store
